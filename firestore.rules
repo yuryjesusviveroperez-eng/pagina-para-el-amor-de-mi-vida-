@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Solo códigos de sala con el formato del generador (6 caracteres, sin 0/O/1/I/L)
+    function esCodigoDeSala(codigo) {
+      return codigo.matches('^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{6}$');
+    }
+
+    // Mensajes del chat: se pueden leer y crear; nunca editar ni borrar.
+    match /salas/{sala}/mensajes/{mensaje} {
+      allow read: if esCodigoDeSala(sala);
+      allow create: if esCodigoDeSala(sala)
+        && request.resource.data.keys().hasOnly(['texto', 'autor', 'deviceId', 'ts'])
+        && request.resource.data.texto is string
+        && request.resource.data.texto.size() > 0
+        && request.resource.data.texto.size() <= 2000
+        && request.resource.data.autor is string
+        && request.resource.data.autor.size() <= 40
+        && request.resource.data.deviceId is string
+        && request.resource.data.deviceId.size() <= 64
+        && request.resource.data.ts is number;
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Indicador "está escribiendo...": solo datos mínimos, con límites.
+    match /salas/{sala}/escribiendo/{dispositivo} {
+      allow read: if esCodigoDeSala(sala);
+      allow create, update: if esCodigoDeSala(sala)
+        && request.resource.data.keys().hasOnly(['nombre', 'ts'])
+        && request.resource.data.nombre is string
+        && request.resource.data.nombre.size() <= 40
+        && request.resource.data.ts is number;
+      allow delete: if esCodigoDeSala(sala);
+    }
+
+    // Cualquier otra ruta: bloqueada.
+    match /{documento=**} {
+      allow read, write: if false;
+    }
+  }
+}
